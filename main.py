@@ -1,4 +1,13 @@
-from typing import List, Optional
+from typing import List, Dict, Tuple, Optional
+
+
+# =============== 常量定义 ===============
+
+
+assoc_dic: Dict[str, "Assoc"] = {}
+
+
+# =============== 类定义 ===============
 
 
 class Error(Exception):
@@ -6,18 +15,14 @@ class Error(Exception):
 
 
 class Assoc:
-    def __init__(self, name: str,
-                 fact: Optional[list] = None,
-                 defi: Optional[list] = None,
-                 been: bool = False) -> None:
-        self.name = name
-        if fact is None:
-            fact = []
-        self.fact = fact
-        if defi is None:
-            defi = []
-        self.defi = defi
-        self.been = been
+    def __init__(self, name: str) -> None:
+        self.name: str = name
+        self.facts: List[str] = []
+        self.rules: List[Tuple[str]] = []
+        self.been: bool = False
+
+
+# =============== 基石函数 ===============
 
 
 def consp(string: str) -> bool:
@@ -32,12 +37,16 @@ def match_parens(cons: str) -> dict:
             stack.append(i)
         elif cons[i] == ')':
             if not stack:
-                raise Error("parentheses don't match")
+                raise Error("match_parens: parentheses don't match")
             j = stack.pop()
             matching[i], matching[j] = j, i
     if stack:
-        raise Error("parentheses don't match")
+        raise Error("match_parens: parentheses don't match")
     return matching
+
+
+def list_to_cons(lis: List[str]) -> str:
+    return f"({' '.join(lis)})"
 
 
 def cons_to_list(cons: str) -> List[str]:
@@ -63,10 +72,21 @@ def cons_to_list(cons: str) -> List[str]:
     return lis
 
 
+def car(cons: str) -> str:
+    return cons_to_list(cons)[0]
+
+
+def cdr(cons: str) -> str:
+    return list_to_cons(cons_to_list(cons)[1:])
+
+
 def get_val(ele: str, binds: dict) -> str:
     while ele in binds:
         ele = binds[ele]
     return ele
+
+
+# =============== 底层函数 ===============
 
 
 def match(cons1: str, cons2: str, binds: Optional[dict] = None) -> Optional[dict]:
@@ -106,12 +126,50 @@ def match(cons1: str, cons2: str, binds: Optional[dict] = None) -> Optional[dict
 
 
 def parse(sentence: str) -> str:
-    pass
+    return sentence
 
 
-def define(cons: str):
-    pass
+def def_fact(cons: str) -> None:
+    assoc_name = car(cons)
+    assoc = assoc_dic.setdefault(assoc_name, Assoc(assoc_name))
+    assoc.facts.append(cdr(cons))
+
+
+def def_rule(head: str, body: str) -> None:
+    assoc_name = car(head)
+    assoc = assoc_dic.setdefault(assoc_name, Assoc(assoc_name))
+    assoc.rules.append((cdr(head), body))
+
+
+def define(cons_lis: List[str]) -> None:
+    if len(cons_lis) == 1:
+        def_fact(cons_lis[0])
+    elif len(cons_lis) == 2:
+        def_rule(*cons_lis)
+    else:
+        raise Error("define: syntax is wrong")
 
 
 def search(cons: str) -> Optional[List[dict]]:
     pass
+
+
+# =============== 终端函数 ===============
+
+
+def main():
+    while True:
+        try:
+            sentence = input('>').strip()
+            cons_lis = cons_to_list(parse(sentence))
+            if cons_lis[0] == "define":
+                define(cons_lis[1:])
+            elif cons_lis[0] == "search":
+                if len(cons_lis) != 2:
+                    raise Error("main: syntax is wrong")
+                search(cons_lis[1])
+            else:
+                raise Error("main: no such command")
+        except Error as e:
+            print("Error: ")
+            print(e)
