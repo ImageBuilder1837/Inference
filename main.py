@@ -4,7 +4,7 @@ from typing import List, Dict, Tuple, Optional
 # =============== 常量定义 ===============
 
 
-assoc_dic: Dict[str, "Assoc"] = {}
+global_count = 0
 
 
 # =============== 类定义 ===============
@@ -15,10 +15,11 @@ class Error(Exception):
 
 
 class Assoc:
+    dic: Dict[str, "Assoc"] = {}
     def __init__(self, name: str) -> None:
         self.name: str = name
         self.facts: List[str] = []
-        self.rules: List[Tuple[str]] = []
+        self.rules: List[str] = []
         self.been: bool = False
 
 
@@ -29,7 +30,7 @@ def consp(string: str) -> bool:
     return string[0] == '(' and string[-1] == ')'
 
 
-def match_parens(cons: str) -> dict:
+def match_parens(cons: str) -> Dict[int, int]:
     matching = {}
     stack = []
     for i in range(len(cons)):
@@ -80,94 +81,179 @@ def cdr(cons: str) -> str:
     return list_to_cons(cons_to_list(cons)[1:])
 
 
-def get_val(ele: str, binds: dict) -> str:
+def get_val(ele: str, binds: Dict[str, str]) -> str:
     while ele in binds:
         ele = binds[ele]
     return ele
 
 
+def change_vars(cons: str, binds: Optional[Dict[str, str]] = None) -> Tuple[str, Optional[Dict[str, str]]]:
+    if binds is None:
+        binds = {}
+    global global_count
+
+    lis = cons_to_list(cons)
+    new_lis = []
+    for ele in lis:
+        if consp(ele):
+            new_ele, binds = change_vars(ele, binds)
+        elif ele.startswith('*'):
+            if ele in binds:
+                new_ele = binds[ele]
+            else:
+                new_ele = f"*x{global_count}"
+                global_count += 1
+                binds[ele] = new_ele
+        else:
+            new_ele = ele
+        new_lis.append(new_ele)
+    return list_to_cons(new_lis), binds
+
+
 # =============== 底层函数 ===============
 
 
-def match(cons1: str, cons2: str, binds: Optional[dict] = None) -> Optional[dict]:
+def match(cons1: str, cons2: str, binds: Optional[Dict[str, str]] = None) -> Optional[Dict[str, str]]:
+    '''Remember to judge None and this func is not destructive'''
+
     if binds is None:
         binds = {}
+    new_binds = binds.copy()
 
     lis1, lis2 = cons_to_list(cons1), cons_to_list(cons2)
     if len(lis1) != len(lis2):
         return None
     for ele1, ele2 in zip(lis1, lis2):
-        if ele1 != ele2:
-            return None
-        elif ele1 in binds:
-            cont1 = get_val(ele1, binds)
-            if ele2 in binds:
-                cont2 = get_val(ele2, binds)
+        if ele1 == ele2:
+            continue
+        elif ele1 in new_binds:
+            cont1 = get_val(ele1, new_binds)
+            if ele2 in new_binds:
+                cont2 = get_val(ele2, new_binds)
                 if cont1 != cont2:
                     return None
             else:
                 if cont1 != ele2:
                     return None
-        elif ele2 in binds:
-            cont2 = get_val(ele2, binds)
+        elif ele2 in new_binds:
+            cont2 = get_val(ele2, new_binds)
             if ele1 != cont2:
                 return None
         elif ele1.startswith('*'):
-            binds[ele1] = ele2
+            new_binds[ele1] = ele2
         elif ele2.startswith('*'):
-            binds[ele2] = ele1
+            new_binds[ele2] = ele1
         elif consp(ele1) and consp(ele2):
-            binds = match(ele1, ele2, binds)
-            if binds is None:
+            new_binds = match(ele1, ele2, new_binds)
+            if new_binds is None:
                 return None
         else:
             return None
-    return binds
+    return new_binds
 
 
 def parse(sentence: str) -> str:
-    return sentence
+    cons = sentence
+    return cons
 
 
-def def_fact(cons: str) -> None:
-    assoc_name = car(cons)
-    assoc = assoc_dic.setdefault(assoc_name, Assoc(assoc_name))
-    assoc.facts.append(cdr(cons))
-
-
-def def_rule(head: str, body: str) -> None:
-    assoc_name = car(head)
-    assoc = assoc_dic.setdefault(assoc_name, Assoc(assoc_name))
-    assoc.rules.append((cdr(head), body))
-
-
-def define(cons_lis: List[str]) -> None:
-    if len(cons_lis) == 1:
-        def_fact(cons_lis[0])
-    elif len(cons_lis) == 2:
-        def_rule(*cons_lis)
+def define(cons: str) -> None:
+    if car(cons) == "if":
+        head = car(cdr(cons))
+        assoc_name = car(head)
+        assoc = Assoc.dic.setdefault(assoc_name, Assoc(assoc_name))
+        assoc.rules.append(cdr(cons))
     else:
-        raise Error("define: syntax is wrong")
+        assoc_name = car(cons)
+        assoc = Assoc.dic.setdefault(assoc_name, Assoc(assoc_name))
+        assoc.facts.append(cons)
 
 
-def search(cons: str) -> Optional[List[dict]]:
-    pass
+def prove(cons: str, binds: Optional[Dict[str, str]] = None) -> Optional[List[Dict[str, str]]]:
+    '''Remember to judge None'''
+
+    name = car(cons)
+    binds_lis = []
+    if name == "and":
+        cons1, cons2 = car(cdr(cons)), car(cdr(cdr(cons)))
+        new_binds_lis = prove(cons1, binds)
+        if new_binds_lis is None:
+            return None
+        for new_binds in new_binds_lis:
+            nnew_binds_lis = prove(cons2, new_binds)
+            if nnew_binds_lis is not None:
+                binds_lis.extend(nnew_binds_lis)
+        return binds_lis if binds_lis else None
+    elif name == "or":
+        cons1, cons2 = car(cdr(cons)), car(cdr(cdr(cons)))
+        new_binds_lis = prove(cons1, binds)
+        if new_binds_lis is not None:
+            binds_lis.extend(new_binds_lis)
+        new_binds_lis = prove(cons2, binds)
+        if new_binds_lis is not None:
+            binds_lis.extend(new_binds_lis)
+    elif name == "not":
+        cons1 = car(cdr(cons))
+        new_binds_lis = prove(cons1, binds)
+        if new_binds_lis is None:
+            return [binds] if binds is not None else None
+        return None
+    else:
+        assoc = Assoc.dic[name]
+        if assoc.been:
+            return None
+        assoc.been = True
+
+        for fact in assoc.facts:
+            fact = change_vars(fact)[0]
+            new_binds = match(cons, fact, binds)
+            if new_binds is not None:
+                binds_lis.append(new_binds)
+        for rule in assoc.rules:
+            rule = change_vars(rule)[0]
+            head, body = car(rule), car(cdr(rule))
+            new_binds = match(cons, head, binds)
+            if new_binds is not None:
+                new_binds_lis = prove(body, new_binds)
+                if new_binds_lis is not None:
+                    binds_lis.extend(new_binds_lis)
+        
+        assoc.been = False
+        return binds_lis if binds_lis else None
+
+
+def search(cons: str) -> Optional[List[Dict[str, str]]]:
+    binds_lis = prove(cons)
+    if binds_lis is None:
+        print("no matches")
+    else:
+        name = car(cons)
+        args = cons_to_list(cdr(cons))
+        for i in range(len(binds_lis)):
+            binds = binds_lis[i]
+            print(f"possible match{i+1}:")
+            for arg in args:
+                print(f"{arg}: {get_val(arg, binds)}")
+            print()
 
 
 # =============== 终端函数 ===============
 
 
 def main():
+    print()
     while True:
         try:
-            sentence = input('>').strip()
-            cons_lis = cons_to_list(parse(sentence))
-            if cons_lis[0] == "define":
-                define(cons_lis[1:])
-            elif cons_lis[0] == "search":
-                if len(cons_lis) != 2:
-                    raise Error("main: syntax is wrong")
-                search(cons_lis[1])
+            sentence = input('> ').strip()
+            if not sentence:
+                continue
+            if sentence.lower() in ["quit", "exit"]:
+                break
+            cons = parse(sentence)
+            if car(cons) == "define":
+                define(car(cdr(cons)))
+            elif car(cons) == "search":
+                search(car(cdr(cons)))
             else:
                 raise Error("main: no such command")
         except Error as e:
