@@ -192,6 +192,7 @@ def prove(cons: str, binds: Optional[Dict[str, str]] = None) -> Optional[List[Di
         new_binds_lis = prove(cons2, binds)
         if new_binds_lis is not None:
             binds_lis.extend(new_binds_lis)
+        return binds_lis if binds_lis else None
     elif name == "not":
         cons1 = car(cdr(cons))
         new_binds_lis = prove(cons1, binds)
@@ -227,7 +228,6 @@ def search(cons: str) -> Optional[List[Dict[str, str]]]:
     if binds_lis is None:
         print("no matches")
     else:
-        name = car(cons)
         args = cons_to_list(cdr(cons))
         for i in range(len(binds_lis)):
             binds = binds_lis[i]
@@ -259,3 +259,4 @@ def main():
         except Error as e:
             print("Error: ")
             print(e)
+    print()
