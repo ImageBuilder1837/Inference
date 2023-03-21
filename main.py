@@ -277,8 +277,8 @@ def search(cons: str) -> Optional[List[Dict[str, str]]]:
 def execute(sentence):
     cons = parse(sentence)
     if car(cons) == "define":
-        define(car(cdr(cons)))
         if sentence not in Assoc.lis:
+            define(car(cdr(cons)))
             Assoc.lis.append(sentence)
     elif car(cons) == "search":
         search(car(cdr(cons)))
