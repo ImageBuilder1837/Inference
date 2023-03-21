@@ -1,3 +1,4 @@
+import os
 from typing import List, Dict, Tuple, Optional
 
 
@@ -16,6 +17,7 @@ class Error(Exception):
 
 class Assoc:
     dic: Dict[str, "Assoc"] = {}
+    lis: List[str] = []
     def __init__(self, name: str) -> None:
         self.name: str = name
         self.facts: List[str] = []
@@ -113,6 +115,29 @@ def change_vars(cons: str, binds: Optional[Dict[str, str]] = None) -> Tuple[str,
 # =============== 底层函数 ===============
 
 
+def init():
+    Assoc.dic = {}
+    Assoc.lis = []
+
+
+def save(file: str) -> None:
+    if not os.path.exists("save"):
+        os.mkdir("save")
+    
+    with open(f"save\\{file}", 'w', encoding='utf-8') as f:
+        f.write('\n'.join(Assoc.lis))
+
+
+def load(file: str) -> None:
+    if not os.path.exists(f"save\\{file}"):
+        raise Error("no such file")
+    
+    with open(f"save\\{file}", encoding='utf-8') as f:
+        for line in f.readlines():
+            cons = parse(line.strip())
+            execute(cons)
+
+
 def match(cons1: str, cons2: str, binds: Optional[Dict[str, str]] = None) -> Optional[Dict[str, str]]:
     '''Remember to judge None and this func is not destructive'''
 
@@ -160,12 +185,12 @@ def parse(sentence: str) -> str:
 def define(cons: str) -> None:
     if car(cons) == "if":
         head = car(cdr(cons))
-        assoc_name = car(head)
-        assoc = Assoc.dic.setdefault(assoc_name, Assoc(assoc_name))
+        name = car(head)
+        assoc = Assoc.dic.setdefault(name, Assoc(name))
         assoc.rules.append(cdr(cons))
     else:
-        assoc_name = car(cons)
-        assoc = Assoc.dic.setdefault(assoc_name, Assoc(assoc_name))
+        name = car(cons)
+        assoc = Assoc.dic.setdefault(name, Assoc(name))
         assoc.facts.append(cons)
 
 
@@ -200,7 +225,7 @@ def prove(cons: str, binds: Optional[Dict[str, str]] = None) -> Optional[List[Di
             return [binds] if binds is not None else None
         return None
     else:
-        assoc = Assoc.dic[name]
+        assoc = Assoc.dic.get(name, Assoc(name))
         if assoc.been:
             return None
         assoc.been = True
@@ -240,7 +265,22 @@ def search(cons: str) -> Optional[List[Dict[str, str]]]:
 # =============== 终端函数 ===============
 
 
+def execute(cons):
+    if car(cons) == "define":
+        define(car(cdr(cons)))
+        Assoc.lis.append(cons)
+    elif car(cons) == "search":
+        search(car(cdr(cons)))
+    elif car(cons) == "save":
+        save(car(cdr(cons)))
+    elif car(cons) == "load":
+        load(car(cdr(cons)))
+    else:
+        raise Error("execute: no such command")
+
+
 def main():
+    init()
     print()
     while True:
         try:
@@ -250,12 +290,7 @@ def main():
             if sentence.lower() in ["quit", "exit"]:
                 break
             cons = parse(sentence)
-            if car(cons) == "define":
-                define(car(cdr(cons)))
-            elif car(cons) == "search":
-                search(car(cdr(cons)))
-            else:
-                raise Error("main: no such command")
+            execute(cons)
         except Error as e:
             print("Error: ")
             print(e)
