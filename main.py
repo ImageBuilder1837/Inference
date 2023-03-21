@@ -5,7 +5,8 @@ from typing import List, Dict, Tuple, Optional
 # =============== 常量定义 ===============
 
 
-global_count = 0
+global_count: int = 0
+file_dic: Dict[str, bool] = {}
 
 
 # =============== 类定义 ===============
@@ -116,6 +117,9 @@ def change_vars(cons: str, binds: Optional[Dict[str, str]] = None) -> Tuple[str,
 
 
 def init():
+    global global_count, file_dic
+    global_count = 0
+    file_dic = {}
     Assoc.dic = {}
     Assoc.lis = []
 
@@ -129,13 +133,18 @@ def save(file: str) -> None:
 
 
 def load(file: str) -> None:
+    if file_dic.get(file, False):
+        return
+    file_dic[file] = True
+
     if not os.path.exists(f"save\\{file}"):
         raise Error("no such file")
     
     with open(f"save\\{file}", encoding='utf-8') as f:
         for line in f.readlines():
-            cons = parse(line.strip())
-            execute(cons)
+            execute(line.strip())
+    
+    file_dic[file] = False
 
 
 def match(cons1: str, cons2: str, binds: Optional[Dict[str, str]] = None) -> Optional[Dict[str, str]]:
@@ -265,10 +274,12 @@ def search(cons: str) -> Optional[List[Dict[str, str]]]:
 # =============== 终端函数 ===============
 
 
-def execute(cons):
+def execute(sentence):
+    cons = parse(sentence)
     if car(cons) == "define":
         define(car(cdr(cons)))
-        Assoc.lis.append(cons)
+        if sentence not in Assoc.lis:
+            Assoc.lis.append(sentence)
     elif car(cons) == "search":
         search(car(cdr(cons)))
     elif car(cons) == "save":
@@ -289,8 +300,7 @@ def main():
                 continue
             if sentence.lower() in ["quit", "exit"]:
                 break
-            cons = parse(sentence)
-            execute(cons)
+            execute(sentence)
         except Error as e:
             print("Error: ")
             print(e)
