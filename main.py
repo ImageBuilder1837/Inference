@@ -22,9 +22,10 @@ class Assoc:
 
     dic: Dict[str, "Assoc"] = {}
     cmd_lis: List[str] = []
-    __slots__ = ("name", "facts", "rules", "been")
-    def __init__(self, name: str) -> None:
+    __slots__ = ("name", "arg_num", "facts", "rules", "been")
+    def __init__(self, name: str, arg_num: int) -> None:
         self.name = name
+        self.arg_num = arg_num
         self.facts: List[Cons] = []
         self.rules: List[Cons] = []
         self.been: bool = False
@@ -306,12 +307,14 @@ def define(cons: Cons) -> None:
         # 定义规则
         head = car(cdr(cons))
         assoc_name = car(head)
-        assoc = Assoc.dic.setdefault(assoc_name, Assoc(assoc_name))
+        arg_num = len(cons_to_list(head))-1
+        assoc = Assoc.dic.setdefault(assoc_name, Assoc(assoc_name, arg_num))
         assoc.rules.append(cdr(cons))
     else:
         # 定义事实
         assoc_name = car(cons)
-        assoc = Assoc.dic.setdefault(assoc_name, Assoc(assoc_name))
+        arg_num = len(cons_to_list(cons))-1
+        assoc = Assoc.dic.setdefault(assoc_name, Assoc(assoc_name, arg_num))
         assoc.facts.append(cons)
 
 
@@ -353,7 +356,8 @@ def prove(cons: Cons, binds: Optional[Binds] = None) -> Optional[List[Binds]]:
             return [binds] if binds is not None else None
         return None
     else:
-        assoc = Assoc.dic.get(name, Assoc(name))
+        arg_num = len(cons_to_list(cons))-1
+        assoc = Assoc.dic.get(name, Assoc(name, arg_num))
 
         # 阻止递归调用规则以防陷入无限循环
         if assoc.been:
@@ -381,19 +385,30 @@ def prove(cons: Cons, binds: Optional[Binds] = None) -> Optional[List[Binds]]:
         return binds_lis if binds_lis else None
 
 
-def search(cons: Cons) -> Optional[List[Binds]]:
+def search(sent: str) -> Optional[List[Binds]]:
+    if consp(sent):
+        cons = sent
+    else:
+        global global_count
+        lis = [sent]
+        for _ in range(Assoc.dic[sent].arg_num):
+            lis.append(f"*x{global_count}")
+            global_count += 1
+        cons = list_to_cons(lis)
+
     binds_lis = prove(cons)
     if binds_lis is None:
         print("No matches")
     else:
         # 寻找该Assoc所属的基本语法规则，将Cons转化为语句
         assoc_name = car(cons)
+        exprp = False
         for expr_name in Expression.name_lis:
             if assoc_name in Expression.dic[expr_name].assoc_name_lis:
-                break
-        else:
-            raise Error("search: No such assoc")
-        expr = Expression.dic[expr_name]
+                expr = Expression.dic[expr_name]
+                exprp = True
+                break 
+
         for binds in binds_lis:
             new_atom_lis = []
             for atom in cons_to_list(cons):
@@ -402,8 +417,11 @@ def search(cons: Cons) -> Optional[List[Binds]]:
                 else:
                     new_atom_lis.append(atom)
             new_cons = list_to_cons(new_atom_lis)
-            ans = re.match(expr.ptn_cons, new_cons)
-            print(expr.targ_sent.format(*ans.groups()))
+            if exprp:
+                ans = re.match(expr.ptn_cons, new_cons)
+                print(expr.targ_sent.format(*ans.groups()))
+            else:
+                print(new_cons)
 
 
 # =============== 全局量定义 ===============
@@ -448,8 +466,12 @@ Expression.name_lis = ["is_not_of", "is_not", "not_equals", "is_of", "is", "equa
 
 
 def execute(sentence: str) -> None:
-    sentence = standardlize(sentence)
-    cons = parse(sentence)
+    if consp(sentence):
+        cons = sentence
+    else:
+        sentence = standardlize(sentence)
+        cons = parse(sentence)
+
     if car(cons) == "define":
         if sentence not in Assoc.cmd_lis:
             define(car(cdr(cons)))
