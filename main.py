@@ -139,7 +139,7 @@ def change_vars(cons: Cons, binds: Optional[Binds] = None) -> Tuple[Cons, Option
             if ele in binds:
                 new_ele = binds[ele]
             else:
-                new_ele = f"*x{global_count}"
+                new_ele = f"*@#:{global_count}"
                 global_count += 1
                 binds[ele] = new_ele
         else:
@@ -207,9 +207,13 @@ def match(cons1: Cons, cons2: Cons, binds: Optional[Binds] = None) -> Optional[B
         elif ele1 in new_binds:
             cont1 = get_val(ele1, new_binds)
             new_binds = match(f"({cont1})", f"({ele2})", new_binds)
+            if new_binds is None:
+                return None
         elif ele2 in new_binds:
             cont2 = get_val(ele2, new_binds)
             new_binds = match(f"({ele1})", f"({cont2})", new_binds)
+            if new_binds is None:
+                return None
         elif ele1.startswith('*'):
             new_binds[ele1] = ele2
         elif ele2.startswith('*'):
@@ -271,7 +275,7 @@ def parse(sentence: str) -> Cons:
             atom = atom_lis[i]
             if atom in frame_op_name_lis:
                 operator = Operator.dic[atom]
-                op_arg_lis = []
+                arg_lis = []
                 for _ in range(operator.left_num):
                     try:
                         arg = new_atom_lis.pop()
@@ -279,7 +283,7 @@ def parse(sentence: str) -> Cons:
                         raise Error("parse: Wrong syntax")
                     if arg in Operator.dic.keys():
                         raise Error("parse: Wrong syntax")
-                    op_arg_lis.insert(0, arg)
+                    arg_lis.insert(0, arg)
                 for _ in range(operator.right_num):
                     try:
                         arg = atom_lis[i+1]
@@ -287,16 +291,15 @@ def parse(sentence: str) -> Cons:
                         raise Error("parse: Wrong syntax")
                     if arg in Operator.dic.keys():
                         raise Error("parse: Wrong syntax")
-                    op_arg_lis.append(arg)
+                    arg_lis.append(arg)
                     i += 1
-                new_atom_lis.append(list_to_cons([atom, *op_arg_lis]))
+                new_atom_lis.append(list_to_cons([atom, *arg_lis]))
             else:
                 new_atom_lis.append(atom)
             i += 1
         atom_lis = new_atom_lis
 
     if len(atom_lis) != 1:
-        print(atom_lis)
         raise Error("parse: Wrong syntax")
     cons = atom_lis[0]
     return cons
@@ -333,6 +336,8 @@ def prove(cons: Cons, binds: Optional[Binds] = None) -> Optional[List[Binds]]:
                     binds_lis.extend(nnew_binds_lis)
         else:
             new_binds_lis2 = prove(cons2, binds)
+            if new_binds_lis2 is None:
+                return None
             for new_binds in new_binds_lis2:
                 nnew_binds_lis = prove(cons1, new_binds)
                 if nnew_binds_lis is not None:
@@ -392,7 +397,7 @@ def search(sent: str) -> Optional[List[Binds]]:
         global global_count
         lis = [sent]
         for _ in range(Assoc.dic[sent].arg_num):
-            lis.append(f"*x{global_count}")
+            lis.append(f"*@#:{global_count}")
             global_count += 1
         cons = list_to_cons(lis)
 
@@ -407,8 +412,9 @@ def search(sent: str) -> Optional[List[Binds]]:
             if assoc_name in Expression.dic[expr_name].assoc_name_lis:
                 expr = Expression.dic[expr_name]
                 exprp = True
-                break 
+                break
 
+        output_pool = []
         for binds in binds_lis:
             new_atom_lis = []
             for atom in cons_to_list(cons):
@@ -417,11 +423,21 @@ def search(sent: str) -> Optional[List[Binds]]:
                 else:
                     new_atom_lis.append(atom)
             new_cons = list_to_cons(new_atom_lis)
-            if exprp:
-                ans = re.match(expr.ptn_cons, new_cons)
-                print(expr.targ_sent.format(*ans.groups()))
-            else:
-                print(new_cons)
+            if new_cons not in output_pool:
+                output_pool.append(new_cons)
+                if exprp:
+                    ans = re.match(expr.ptn_cons, new_cons)
+                    print(expr.targ_sent.format(*ans.groups()))
+                else:
+                    print(new_cons)
+
+
+def judge(cons: Cons) -> None:
+    binds_lis = prove(cons)
+    if binds_lis is None:
+        print(False)
+    else:
+        print(True)
 
 
 # =============== 全局量定义 ===============
@@ -432,6 +448,7 @@ file_dic: Dict[str, bool] = {}
 
 Operator.dic["define"] = Operator("define", 0, 1, 0)
 Operator.dic["search"] = Operator("search", 0, 1, 0)
+Operator.dic["judge"] = Operator("judge", 0, 1, 0)
 Operator.dic["save"] = Operator("save", 0, 1, 0)
 Operator.dic["load"] = Operator("load", 0, 1, 0)
 Operator.dic["if"] = Operator("if", 1, 1, 1)
@@ -466,22 +483,27 @@ Expression.name_lis = ["is_not_of", "is_not", "not_equals", "is_of", "is", "equa
 
 
 def execute(sentence: str) -> None:
-    if consp(sentence):
+    if not sentence:
+        return
+    elif consp(sentence):
         cons = sentence
     else:
         sentence = standardlize(sentence)
         cons = parse(sentence)
 
-    if car(cons) == "define":
+    command, cont = car(cons), car(cdr(cons))
+    if command == "define":
         if sentence not in Assoc.cmd_lis:
-            define(car(cdr(cons)))
+            define(cont)
             Assoc.cmd_lis.append(sentence)
-    elif car(cons) == "search":
-        search(car(cdr(cons)))
-    elif car(cons) == "save":
-        save(car(cdr(cons)))
-    elif car(cons) == "load":
-        load(car(cdr(cons)))
+    elif command == "search":
+        search(cont)
+    elif command == "save":
+        save(cont)
+    elif command == "load":
+        load(cont)
+    elif command == "judge":
+        judge(cont)
     else:
         raise Error("execute: No such command")
 
@@ -494,9 +516,6 @@ def main() -> None:
     while True:
         try:
             sentence = input('> ').strip()
-            if not sentence:
-                # 空输入特判
-                continue
             if sentence.lower() in ["quit", "exit"]:
                 # 顶层退出指令特判
                 break
