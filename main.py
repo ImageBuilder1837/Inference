@@ -17,11 +17,14 @@ class Error(Exception):
     '''标准错误'''
 
 
+class Exit(Exception):
+    '''标准退出'''
+
+
 class Assoc:
     '''逻辑事实及规则'''
 
     dic: Dict[str, "Assoc"] = {}
-    cmd_lis: List[str] = []
     __slots__ = ("name", "arg_num", "facts", "rules", "been")
     def __init__(self, name: str, arg_num: int) -> None:
         self.name = name
@@ -152,11 +155,11 @@ def change_vars(cons: Cons, binds: Optional[Binds] = None) -> Tuple[Cons, Option
 
 
 def init():
-    global global_count, file_dic
+    global global_count, file_dic, cmd_lis
     global_count = 0
     file_dic = {}
     Assoc.dic = {}
-    Assoc.cmd_lis = []
+    cmd_lis = []
     define("(= *x *x)")
 
 
@@ -165,8 +168,11 @@ def save(file: str) -> None:
     if not os.path.exists("save"):
         os.mkdir("save")
     
-    with open(f"save\\{file}", 'w', encoding='utf-8') as f:
-        f.write('\n'.join(Assoc.cmd_lis))
+    try:
+        with open(f"save\\{file}", 'w', encoding='utf-8') as f:
+            f.write('\n'.join(cmd_lis))
+    except:
+        raise Error("save: Fail to save")
 
 
 def load(file: str) -> None:
@@ -175,12 +181,16 @@ def load(file: str) -> None:
     file_dic[file] = True
 
     if not os.path.exists(f"save\\{file}"):
-        raise Error("No such file")
-    
-    with open(f"save\\{file}", encoding='utf-8') as f:
-        for line in f.readlines():
-            execute(line.strip())
-    
+        raise Error("load: No such file")
+
+    try:
+        with open(f"save\\{file}", encoding='utf-8') as f:
+            lines = f.readlines()
+    except:
+        raise Error("load: Fail to open file")
+
+    for line in lines:
+        execute(line.strip())
     file_dic[file] = False
 
 
@@ -230,11 +240,11 @@ def match(cons1: Cons, cons2: Cons, binds: Optional[Binds] = None) -> Optional[B
 def standardlize(sentence: str) -> str:
     '''输入预处理'''
 
+    sentence = ' ( '.join(sentence.split('('))
+    sentence = ' ) '.join(sentence.split(')'))
     sentence = ' '.join(sentence.split())
-    while "( " in sentence:
-        sentence = sentence.replace("( ", "(")
-    while " )" in sentence:
-        sentence = sentence.replace(" )", ")")
+    sentence = '('.join(sentence.split('( '))
+    sentence = ')'.join(sentence.split(' )'))
     sentence = sentence.strip()
     return sentence
 
@@ -322,7 +332,6 @@ def define(cons: Cons) -> None:
 
 
 def prove(cons: Cons, binds: Optional[Binds] = None) -> Optional[List[Binds]]:
-
     name = car(cons)
     binds_lis = []
     if name == "and":
@@ -432,23 +441,15 @@ def search(sent: str) -> Optional[List[Binds]]:
                     print(new_cons)
 
 
-def judge(cons: Cons) -> None:
-    binds_lis = prove(cons)
-    if binds_lis is None:
-        print(False)
-    else:
-        print(True)
-
-
 # =============== 全局量定义 ===============
 
 
 global_count: int = 0
+cmd_lis: List[str] = []
 file_dic: Dict[str, bool] = {}
 
 Operator.dic["define"] = Operator("define", 0, 1, 0)
 Operator.dic["search"] = Operator("search", 0, 1, 0)
-Operator.dic["judge"] = Operator("judge", 0, 1, 0)
 Operator.dic["save"] = Operator("save", 0, 1, 0)
 Operator.dic["load"] = Operator("load", 0, 1, 0)
 Operator.dic["if"] = Operator("if", 1, 1, 1)
@@ -485,6 +486,8 @@ Expression.name_lis = ["is_not_of", "is_not", "not_equals", "is_of", "is", "equa
 def execute(sentence: str) -> None:
     if not sentence:
         return
+    elif sentence in ["quit", "exit"]:
+        raise Exit
     elif consp(sentence):
         cons = sentence
     else:
@@ -493,17 +496,17 @@ def execute(sentence: str) -> None:
 
     command, cont = car(cons), car(cdr(cons))
     if command == "define":
-        if sentence not in Assoc.cmd_lis:
+        if sentence not in cmd_lis:
             define(cont)
-            Assoc.cmd_lis.append(sentence)
+            cmd_lis.append(sentence)
     elif command == "search":
         search(cont)
     elif command == "save":
         save(cont)
     elif command == "load":
-        load(cont)
-    elif command == "judge":
-        judge(cont)
+        if sentence not in cmd_lis:
+            load(cont)
+            cmd_lis.append(sentence)
     else:
         raise Error("execute: No such command")
 
@@ -516,13 +519,12 @@ def main() -> None:
     while True:
         try:
             sentence = input('> ').strip()
-            if sentence.lower() in ["quit", "exit"]:
-                # 顶层退出指令特判
-                break
             execute(sentence)
         except Error as e:
             print("Error: ")
             print(e)
+        except Exit as e:
+            break
     print()
 
 
