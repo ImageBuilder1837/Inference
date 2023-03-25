@@ -489,6 +489,7 @@ def execute(sentence: str) -> None:
     elif sentence in ["quit", "exit"]:
         raise Exit
     elif consp(sentence):
+        sentence = standardlize(sentence)
         cons = sentence
     else:
         sentence = standardlize(sentence)
