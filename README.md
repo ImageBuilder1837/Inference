@@ -46,7 +46,7 @@
     ```
     Bob is male
     python is not bird
-  ```
+    ```
   
 * **```is of```**：用于表示相关，否定形式为```is not of```，格式如下：
   ```
@@ -57,7 +57,7 @@
     ```
     *a is parent of *b
     Camus is not author of Ulysses
-  ```
+    ```
   
 * **```equals```**：用于表示相等，否定形式为```not equals```，格式如下：
   ```

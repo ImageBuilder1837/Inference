@@ -524,7 +524,7 @@ def main() -> None:
         except Error as e:
             print("Error: ")
             print(e)
-        except Exit as e:
+        except Exit:
             break
     print()
 
